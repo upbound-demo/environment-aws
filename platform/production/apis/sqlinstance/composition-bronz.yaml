@@ -1,0 +1,115 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xsqlinstances-bronze
+  labels:
+    provider: aws
+spec:
+  writeConnectionSecretsToNamespace: upbound-system
+  compositeTypeRef:
+    apiVersion: demo.upbound.io/v1alpha1
+    kind: XSQLInstance
+  patchSets:
+  # If triggered by claim, uses name and namespace. If composite,
+  # uses only the name. Useful for selection.
+  - name: identifiers
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.name
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.claimRef.name
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+      policy:
+        fromFieldPath: Optional
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.claimRef.namespace
+      toFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      policy:
+        fromFieldPath: Optional
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.labels[demo.upbound.io/root-name]
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+      policy:
+        fromFieldPath: Optional
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      toFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      policy:
+        fromFieldPath: Optional
+  resources:
+    - name: compositeSQLInstanceDbSubnetGroup
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: SubnetGroup
+        spec:
+          forProvider:
+            region: us-west-2
+            description: An excellent formation of subnetworks.
+          deletionPolicy: Delete
+      patches:
+        - type: PatchSet
+          patchSetName: identifiers
+        - fromFieldPath: spec.subnetIdSelector.matchLabels
+          toFieldPath: spec.forProvider.subnetIdSelector.matchLabels
+          policy:
+            fromFieldPath: Required
+    - name: RDSInstanceSmall
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: Instance
+        spec:
+          forProvider:
+            region: us-west-2
+            dbSubnetGroupNameSelector:
+              matchControllerRef: true
+            instanceClass: db.t3.micro
+            skipFinalSnapshot: true
+            publiclyAccessible: false
+            username: masteruser
+            autoGeneratePassword: true
+            passwordSecretRef:
+              key: password
+              name: example-dbinstance
+              namespace: upbound-system
+          deletionPolicy: Delete
+      patches:
+        - type: PatchSet
+          patchSetName: identifiers
+        - fromFieldPath: metadata.uid
+          toFieldPath: spec.writeConnectionSecretToRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-sql" #change
+        - fromFieldPath: spec.writeConnectionSecretToRef.namespace
+          toFieldPath: spec.writeConnectionSecretToRef.namespace
+        - fromFieldPath: spec.engine
+          toFieldPath: spec.forProvider.engine
+        - fromFieldPath: spec.engineVersion
+          toFieldPath: spec.forProvider.engineVersion
+        - fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.allocatedStorage
+        - fromFieldPath: spec.securityGroupIdSelector.matchLabels
+          toFieldPath: spec.forProvider.vpcSecurityGroupIdSelector.matchLabels
+          policy:
+            fromFieldPath: Required
+        - fromFieldPath: spec.passwordSecretRef.namespace
+          toFieldPath: spec.forProvider.passwordSecretRef.namespace
+        - fromFieldPath: spec.passwordSecretRef.name
+          toFieldPath: spec.forProvider.passwordSecretRef.name
+        - fromFieldPath: spec.passwordSecretRef.key
+          toFieldPath: spec.forProvider.passwordSecretRef.key
+        - fromFieldPath: spec.initialDBName
+          toFieldPath: spec.forProvider.dbName
+          policy:
+            fromFieldPath: Optional
+      connectionDetails:
+        - fromFieldPath: "status.atProvider.endpoint"
+          name: endpoint
+        - fromFieldPath: "status.atProvider.address"
+          name: host
+        - fromFieldPath: "spec.forProvider.username"
+          name: username
+        - fromConnectionSecretKey: "attribute.password"
+          name: password
