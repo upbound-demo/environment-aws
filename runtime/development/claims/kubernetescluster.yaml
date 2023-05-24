@@ -1,0 +1,17 @@
+apiVersion: demo.upbound.io/v1alpha1
+kind: KubernetesCluster
+metadata:
+  name: dev-workloads
+  namespace: default
+spec:
+  teams:
+  - name: team-blue
+    repository: "https://github.com/upbound-demo/team-blue"
+    environments:
+    - name: dev
+      path: ./cluster/dev
+  nodes:
+    count: 3
+    size: small
+  writeConnectionSecretToRef:
+    name: kubeconfig-dev-workloads
