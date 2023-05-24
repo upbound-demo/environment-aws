@@ -1,0 +1,23 @@
+apiVersion: aws.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  credentials:
+    source: IRSA
+---
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: irsa
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::609897127049:role/icp-dev-control-plane
+spec: {}
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: helm-incontrolplane
+spec:
+  credentials:
+    source: InjectedIdentity

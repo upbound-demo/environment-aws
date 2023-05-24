@@ -1,0 +1,7 @@
+apiVersion: mcp.upbound.io/v1alpha1
+kind: HostCluster
+metadata:
+  name: 00000000-0000-0000-0000-000000000000
+spec:
+  compositionRef:
+    name: incluster.hostclusters.mcp.upbound.io

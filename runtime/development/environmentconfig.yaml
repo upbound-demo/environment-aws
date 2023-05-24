@@ -1,0 +1,11 @@
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: EnvironmentConfig
+metadata:
+  name: controlplane
+data:
+  controlPlane:
+    hostName: https://proxy.libertyicp.upboundrocks.cloud
+    name: dev
+    token: TOKEN
+  account:
+    name: my-org

@@ -1,0 +1,314 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xeks.demo.upbound.io
+  labels:
+    provider: aws
+spec:
+  writeConnectionSecretsToNamespace: upbound-system
+  compositeTypeRef:
+    apiVersion: demo.upbound.io/v1alpha1
+    kind: XEKS
+  patchSets:
+  - name: identifiers
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.name
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.labels[demo.upbound.io/root-name]
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+      policy:
+        fromFieldPath: Optional
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      toFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      policy:
+        fromFieldPath: Optional
+  - name: cluster-name-label
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.name
+      toFieldPath: metadata.labels[demo.upbound.io/xeks-name]
+  - name: cluster-name-tag
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.name
+      toFieldPath: spec.forProvider.tags.xeks-name
+  resources:
+    - base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Role
+        metadata:
+          labels:
+            role: controlplane
+        spec:
+          forProvider:
+            assumeRolePolicy: |
+              {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "eks.amazonaws.com"
+                            ]
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ]
+                    }
+                ]
+              }
+      name: controlplaneRole
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+        - type: PatchSet
+          patchSetName: cluster-name-tag
+    - base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: RolePolicyAttachment
+        spec:
+          forProvider:
+            policyArn: arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+            roleSelector:
+              matchControllerRef: true
+              matchLabels:
+                role: controlplane
+      name: clusterRolePolicyAttachment
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+    - base:
+        apiVersion: eks.aws.upbound.io/v1beta1
+        kind: Cluster
+        spec:
+          forProvider:
+            region: us-west-2
+            roleArnSelector:
+              matchControllerRef: true
+              matchLabels:
+                role: controlplane
+            vpcConfig:
+              - endpointPrivateAccess: true
+                endpointPublicAccess: true
+            version: "1.23"
+      name: kubernetesCluster
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+        - type: PatchSet
+          patchSetName: cluster-name-tag
+        - fromFieldPath: spec.securityGroupIds
+          toFieldPath: spec.forProvider.vpcConfig[0].securityGroupIds
+        - fromFieldPath: spec.subnetIds
+          toFieldPath: spec.forProvider.vpcConfig[0].subnetIds
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.identity[0].oidc[0].issuer
+          toFieldPath: status.oidc.issuer
+          policy:
+            fromFieldPath: Optional
+    - base:
+        apiVersion: eks.aws.upbound.io/v1beta1
+        kind: ClusterAuth
+        spec:
+          forProvider:
+            region: us-west-2
+            clusterNameSelector:
+              matchControllerRef: true
+      name: kubernetesClusterAuth
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+        - fromFieldPath: spec.writeConnectionSecretToRef.namespace
+          toFieldPath: spec.writeConnectionSecretToRef.namespace
+        - fromFieldPath: metadata.uid
+          toFieldPath: spec.writeConnectionSecretToRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-ekscluster"
+      connectionDetails:
+        - fromConnectionSecretKey: kubeconfig
+    - base:
+        apiVersion: helm.crossplane.io/v1beta1
+        kind: ProviderConfig
+        spec:
+          credentials:
+            source: Secret
+            secretRef:
+              key: kubeconfig
+      name: providerConfig-helm
+      patches:
+        - fromFieldPath: spec.nameForProviderConfigs
+          toFieldPath: metadata.name
+          policy:
+            fromFieldPath: Required
+        - fromFieldPath: spec.writeConnectionSecretToRef.namespace
+          toFieldPath: spec.credentials.secretRef.namespace
+        # This ProviderConfig uses the above EKS cluster's connection secret as
+        # its credentials secret.
+        - fromFieldPath: metadata.uid
+          toFieldPath: spec.credentials.secretRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-ekscluster"
+      readinessChecks:
+        - type: None
+    - base:
+        apiVersion: kubernetes.crossplane.io/v1alpha1
+        kind: ProviderConfig
+        spec:
+          credentials:
+            source: Secret
+            secretRef:
+              key: kubeconfig
+      name: providerConfig-kubernetes
+      patches:
+        - fromFieldPath: spec.nameForProviderConfigs
+          toFieldPath: metadata.name
+          policy:
+            fromFieldPath: Required
+        - fromFieldPath: spec.writeConnectionSecretToRef.namespace
+          toFieldPath: spec.credentials.secretRef.namespace
+        # This ProviderConfig uses the above EKS cluster's connection secret as
+        # its credentials secret.
+        - fromFieldPath: metadata.uid
+          toFieldPath: spec.credentials.secretRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-ekscluster"
+      readinessChecks:
+        - type: None
+    - base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Role
+        metadata:
+          labels:
+            role: nodegroup
+        spec:
+          forProvider:
+            assumeRolePolicy: |
+              {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [
+                                "ec2.amazonaws.com"
+                            ]
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ]
+                    }
+                ]
+              }
+      name: nodegroupRole
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+        - type: PatchSet
+          patchSetName: cluster-name-tag
+    - base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: RolePolicyAttachment
+        spec:
+          forProvider:
+            policyArn: arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+            roleSelector:
+              matchControllerRef: true
+              matchLabels:
+                role: nodegroup
+      name: workerNodeRolePolicyAttachment
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+    - base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: RolePolicyAttachment
+        spec:
+          forProvider:
+            policyArn: arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+            roleSelector:
+              matchControllerRef: true
+              matchLabels:
+                role: nodegroup
+      name: cniRolePolicyAttachment
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+    - base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: RolePolicyAttachment
+        spec:
+          forProvider:
+            policyArn: arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+            roleSelector:
+              matchControllerRef: true
+              matchLabels:
+                role: nodegroup
+      name: containerRegistryRolePolicyAttachment
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+    - base:
+        apiVersion: eks.aws.upbound.io/v1beta1
+        kind: NodeGroup
+        spec:
+          forProvider:
+            region: us-west-2
+            clusterNameSelector:
+              matchControllerRef: true
+            nodeRoleArnSelector:
+              matchControllerRef: true
+              matchLabels:
+                role: nodegroup
+            scalingConfig:
+              - minSize: 1
+                maxSize: 100
+                desiredSize: 1
+            instanceTypes:
+              - t3.medium
+      name: nodeGroupPublic
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+        - type: PatchSet
+          patchSetName: cluster-name-tag
+        - fromFieldPath: spec.nodes.count
+          toFieldPath: spec.forProvider.scalingConfig[0].desiredSize
+        - fromFieldPath: spec.nodes.size
+          toFieldPath: spec.forProvider.instanceTypes[0]
+          transforms:
+            - type: map
+              map:
+                small: t3.small
+                medium: t3.medium
+                large: t3.large
+        - fromFieldPath: spec.publicSubnetIds
+          toFieldPath: spec.forProvider.subnetIds
+    - base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: OpenIDConnectProvider
+        spec:
+          forProvider:
+            clientIdList:
+              - sts.amazonaws.com
+            thumbprintList:
+              - "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+      name: oidcProvider
+      patches:
+        - type: PatchSet
+          patchSetName: cluster-name-label
+        - type: PatchSet
+          patchSetName: cluster-name-tag
+        - fromFieldPath: status.oidc.issuer
+          toFieldPath: spec.forProvider.url
+          policy:
+            fromFieldPath: Required

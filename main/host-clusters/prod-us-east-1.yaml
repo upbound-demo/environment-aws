@@ -1,0 +1,13 @@
+# apiVersion: mcp.upbound.io/v1alpha1
+# kind: HostCluster
+# metadata:
+#   name: production-us-east-1
+#   labels:
+#     stage: production
+#     region: us-east-1
+#     csp: aws
+# spec:
+#   compositionSelector:
+#     matchLabels:
+#       csp: aws
+#       region: us-east-1

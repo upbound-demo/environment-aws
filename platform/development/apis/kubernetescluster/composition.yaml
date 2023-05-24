@@ -1,0 +1,179 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkubernetesclusters.demo.upbound.io
+spec:
+  writeConnectionSecretsToNamespace: upbound-system
+  compositeTypeRef:
+    apiVersion: demo.upbound.io/v1alpha1
+    kind: XKubernetesCluster
+  environment:
+    environmentConfigs:
+      - ref:
+          name: controlplane
+  patchSets:
+  # If triggered by claim, uses name and namespace. If composite,
+  # uses only the name. Useful for selection.
+  - name: identifiers
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.name
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.claimRef.name
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+      policy:
+        fromFieldPath: Optional
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.claimRef.namespace
+      toFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      policy:
+        fromFieldPath: Optional
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.labels[demo.upbound.io/root-name]
+      toFieldPath: metadata.labels[demo.upbound.io/root-name]
+      policy:
+        fromFieldPath: Optional
+    - type: FromCompositeFieldPath
+      fromFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      toFieldPath: metadata.labels[demo.upbound.io/root-namespace]
+      policy:
+        fromFieldPath: Optional
+  resources:
+    - name: compositeNetworkEKS
+      base:
+        apiVersion: demo.upbound.io/v1alpha1
+        kind: XNetwork
+        spec: {}
+      patches:
+        - type: PatchSet
+          patchSetName: identifiers
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.publicSubnetIds
+          toFieldPath: status.publicSubnetIds
+          policy:
+            fromFieldPath: Required
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.subnetIds
+          toFieldPath: status.subnetIds
+          policy:
+            fromFieldPath: Required
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.securityGroupIds
+          toFieldPath: status.securityGroupIds
+          policy:
+            fromFieldPath: Required
+    - name: compositeClusterEKS
+      base:
+        apiVersion: demo.upbound.io/v1alpha1
+        kind: XEKS
+      connectionDetails:
+        - fromConnectionSecretKey: kubeconfig
+      patches:
+        - type: PatchSet
+          patchSetName: identifiers
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.nameForProviderConfigs
+        - fromFieldPath: metadata.uid
+          toFieldPath: spec.writeConnectionSecretToRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-eks"
+        - fromFieldPath: spec.writeConnectionSecretToRef.namespace
+          toFieldPath: spec.writeConnectionSecretToRef.namespace
+        - fromFieldPath: spec.nodes.count
+          toFieldPath: spec.nodes.count
+        - fromFieldPath: spec.nodes.size
+          toFieldPath: spec.nodes.size
+        - fromFieldPath: status.publicSubnetIds
+          toFieldPath: spec.publicSubnetIds
+          policy:
+            fromFieldPath: Required
+        - fromFieldPath: status.subnetIds
+          toFieldPath: spec.subnetIds
+          policy:
+            fromFieldPath: Required
+        - fromFieldPath: status.securityGroupIds
+          toFieldPath: spec.securityGroupIds
+          policy:
+            fromFieldPath: Required
+    - name: mcpConnectorRelease
+      base:
+        apiVersion: helm.crossplane.io/v1beta1
+        kind: Release
+        spec:
+        # The access to cluster is gone right when its deletion is
+        # scheduled, hence Release gets stuck but there is no need to delete this
+        # in an already deleting cluster anyway.
+          deletionPolicy: Orphan
+          forProvider:
+            chart:
+              name: mcp-connector
+              repository: https://charts.upbound.io/beta
+              version: 0.3.2
+            namespace: kube-system
+            values:
+              mcp:
+                host: proxy.myicp.cloud
+                account: org-name
+                name: controlplane-name
+                namespace: namespace-in-controlplane
+                token: token-to-access-controlplane
+                insecureSkipTLSVerify: true
+      patches:
+        - type: PatchSet
+          patchSetName: identifiers
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.providerConfigRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.values.mcp.namespace
+          policy:
+            fromFieldPath: Required
+        # Control-plane specific.
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: controlPlane.hostName
+          toFieldPath: spec.forProvider.values.mcp.host
+          policy:
+            fromFieldPath: Required
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: account.name
+          toFieldPath: spec.forProvider.values.mcp.account
+          policy:
+            fromFieldPath: Required
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: controlPlane.name
+          toFieldPath: spec.forProvider.values.mcp.name
+          policy:
+            fromFieldPath: Required
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: controlPlane.token
+          toFieldPath: spec.forProvider.values.mcp.token
+          policy:
+            fromFieldPath: Required
+    - name: fluxRelease
+      base:
+        apiVersion: helm.crossplane.io/v1beta1
+        kind: Release
+        spec:
+        # The access to cluster is gone right when its deletion is
+        # scheduled, hence Release gets stuck but there is no need to delete this
+        # in an already deleting cluster anyway.
+          deletionPolicy: Orphan
+          forProvider:
+            chart:
+              name: flux2
+              repository: https://fluxcd-community.github.io/helm-charts
+              version: 2.7.0
+            namespace: flux-system
+      patches:
+        - type: PatchSet
+          patchSetName: identifiers
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.providerConfigRef.name
+  functions:
+    - name: register-team-repos
+      type: Container
+      container:
+        image: ghcr.io/upbound-demo/xfn-fluxcd-per-team:v0.1.6
