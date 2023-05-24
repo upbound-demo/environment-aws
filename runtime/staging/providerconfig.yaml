@@ -11,5 +11,5 @@ kind: ControllerConfig
 metadata:
   name: irsa
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::609897127049:role/icp-development-control-plane
+    eks.amazonaws.com/role-arn: arn:aws:iam::609897127049:role/icp-staging-control-plane
 spec: {}

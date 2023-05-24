@@ -5,7 +5,7 @@ metadata:
 data:
   controlPlane:
     hostName: https://proxy.demoicp.upboundrocks.cloud
-    name: development
+    name: staging
     token: TOKEN
   account:
     name: my-org

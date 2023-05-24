@@ -1,0 +1,82 @@
+apiVersion: mxp.upbound.io/v1alpha1
+kind: ControlPlane
+metadata:
+  name: production
+  labels:
+    platform: production
+spec:
+  writeConnectionSecretToRef:
+    name: kubeconfig-production
+    namespace: flux-system
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: production-platform
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  path: ./platform/production
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  kubeConfig:
+    secretRef:
+      name: kubeconfig-production
+      key: kubeconfig
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: production-runtime
+  namespace: flux-system
+spec:
+  dependsOn:
+  - name: production-platform
+  interval: 1m0s
+  path: ./runtime/production
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  kubeConfig:
+    secretRef:
+      name: kubeconfig-production
+      key: kubeconfig
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: icp-production-control-plane
+spec:
+  forProvider:
+    assumeRolePolicy: |-
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Federated": "arn:aws:iam::609897127049:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/B561A76C39075EEC3C2E09D0018A1F50"
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+              "StringLike": {
+                "oidc.eks.us-east-1.amazonaws.com/id/B561A76C39075EEC3C2E09D0018A1F50:aud": "sts.amazonaws.com",
+                "oidc.eks.us-east-1.amazonaws.com/id/B561A76C39075EEC3C2E09D0018A1F50:sub": "system:serviceaccount:mcp-*-system:provider-aws-*"
+              }
+            }
+          }
+        ]
+      }
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: icp-production-control-plane
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AdministratorAccess
+    roleRef:
+      name: icp-production-control-plane
