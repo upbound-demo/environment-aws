@@ -4,7 +4,7 @@ metadata:
   name: controlplane
 data:
   controlPlane:
-    hostName: https://proxy.libertyicp.upboundrocks.cloud
+    hostName: https://proxy.demoicp.upboundrocks.cloud
     name: dev
     token: TOKEN
   account:

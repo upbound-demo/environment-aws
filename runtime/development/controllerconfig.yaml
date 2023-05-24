@@ -1,7 +1,0 @@
-apiVersion: pkg.crossplane.io/v1alpha1
-kind: ControllerConfig
-metadata:
-  name: irsa
-  annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::609897127049:role/icp-development-control-plane
-spec: {}
