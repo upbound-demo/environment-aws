@@ -58,13 +58,13 @@ spec:
           {
             "Effect": "Allow",
             "Principal": {
-              "Federated": "arn:aws:iam::609897127049:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/B561A76C39075EEC3C2E09D0018A1F50"
+              "Federated": "arn:aws:iam::609897127049:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/C09D53376BDFD92A00BD5042AE19AEFF"
             },
             "Action": "sts:AssumeRoleWithWebIdentity",
             "Condition": {
               "StringLike": {
-                "oidc.eks.us-east-1.amazonaws.com/id/B561A76C39075EEC3C2E09D0018A1F50:aud": "sts.amazonaws.com",
-                "oidc.eks.us-east-1.amazonaws.com/id/B561A76C39075EEC3C2E09D0018A1F50:sub": "system:serviceaccount:mcp-*-system:provider-aws-*"
+                "oidc.eks.us-east-1.amazonaws.com/id/C09D53376BDFD92A00BD5042AE19AEFF:aud": "sts.amazonaws.com",
+                "oidc.eks.us-east-1.amazonaws.com/id/C09D53376BDFD92A00BD5042AE19AEFF:sub": "system:serviceaccount:mcp-*-system:provider-aws-*"
               }
             }
           }
