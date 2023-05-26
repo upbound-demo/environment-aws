@@ -3,6 +3,8 @@
 This repo contains manifests to manage control planes in an Upbound Environment
 deployment. It utilizes IRSA to authenticate to AWS.
 
+It assumes that your EKS cluster is prepared by following the instructions [here](https://github.com/upbound-demo/environments-instructions/).
+
 ## Get Started
 
 ### Preparing Your Own Repository
