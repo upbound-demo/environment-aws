@@ -52,5 +52,14 @@ It assumes that your EKS cluster is prepared by following the instructions [here
   ```bash
   kubectl get role.iam
   ```
+* Access one of the control planes, say `development`.
+  ```bash
+  # The name of the secret is derived from `ControlPlane` CR that resides
+  # in [`main/controlplanes/development.yaml`](./main/control-planes/development.yaml)
+  kubectl get secret kubeconfig-development -n flux-system -o jsonpath='{.data.kubeconfig}' | base64 -d > /tmp/development.yaml
+  ```
+  ```bash
+  KUBECONFIG=/tmp/development.yaml kubectl get xrd
+  ```
 
 Enjoy!
